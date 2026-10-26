@@ -92,3 +92,14 @@ sudo ufw enable
 | 03-ssh-hardened | усиленный SSH, порт 2222, проброс 2222→2222 | 26.10.2026 01:30 |
 
 Примечание: при откате на 01-clean-install правило проброса в VirtualBox нужно привести в соответствие (порт гостя 22 до смены порта SSH, 2222 после).
+
+## 8. Веб-сервер
+
+- Пакет: `nginx` (версия 1.24.0 из репозитория Ubuntu 24.04), установка: `sudo apt update && sudo apt install -y nginx`.
+- Конфигурация ресурса: `/etc/nginx/sites-available/devops-site`, активируется символической ссылкой `/etc/nginx/sites-enabled/devops-site` (`sudo ln -s /etc/nginx/sites-available/devops-site /etc/nginx/sites-enabled/`). Ссылка стандартного ресурса `/etc/nginx/sites-enabled/default` удалена (`sudo rm /etc/nginx/sites-enabled/default`).
+- Содержимое конфигурации: два блока `server`. Первый слушает порты 80 (IPv4 и IPv6), `server_name devops.local`, выполняет `return 301 https://$host$request_uri;`. Второй слушает порты 443 ssl (IPv4 и IPv6), `server_name devops.local`, `ssl_certificate /etc/ssl/certs/devops.crt`, `ssl_certificate_key /etc/ssl/private/devops.key`, `ssl_protocols TLSv1.2 TLSv1.3`, `root /var/www/devops-site`, `index index.html`, `location / { try_files $uri $uri/ =404; }`, `error_page 404 /404.html`, журналы `/var/log/nginx/devops-site.access.log` и `/var/log/nginx/devops-site.error.log`. Заголовок HSTS не добавляется.
+- Каталог ресурса: `/var/www/devops-site`, владелец `devops:devops`, права 755 для каталогов и 644 для файлов. Каталог создаётся командами `sudo mkdir -p /var/www/devops-site` и `sudo chown -R devops:devops /var/www/devops-site`. Содержимое доставляется из каталога `site/` репозитория сценарием `scripts/deploy.sh` (`rsync -az --delete --chmod=D755,F644`).
+- Сертификат: самоподписанный, `/etc/ssl/certs/devops.crt` (владелец root, права 644). Закрытый ключ: `/etc/ssl/private/devops.key` (владелец root, права 600). Команда формирования: `sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/devops.key -out /etc/ssl/certs/devops.crt -subj "/CN=devops.local" -addext "subjectAltName=DNS:devops.local"`. Срок действия: 365 дней.
+- Применение конфигурации: `sudo nginx -t && sudo systemctl reload nginx` (без `restart`).
+- Межсетевой экран: порты 80/tcp и 443/tcp разрешены (см. раздел 6).
+- Доверие клиента к сертификату: на хостовой системе `scp devops:/etc/ssl/certs/devops.crt ~/devops.crt`, запросы выполняются с параметром `--cacert ~/devops.crt`.
