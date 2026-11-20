@@ -118,3 +118,28 @@ sudo ufw enable
 - Именованные тома: `app_db_data` (каталог данных PostgreSQL `/var/lib/postgresql/data`). Команда `docker compose down` том сохраняет, `docker compose down -v` удаляет вместе с данными: на рабочем сервере без необходимости не используется.
 - Конфигурация обратного прокси-сервера: в блок HTTPS файла `/etc/nginx/sites-available/devops-site` добавлено расположение `location /app/ { proxy_pass http://127.0.0.1:5000/; }` с заголовками `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`. Завершающий символ `/` в `proxy_pass` заменяет префикс `/app/` на `/`. Статический ресурс (`location /`) сохранён. Применение: `sudo nginx -t && sudo systemctl reload nginx`. Резервная копия конфигурации до изменения: `/home/devops/devops-site.bak`. При остановленном приложении Nginx возвращает 502 Bad Gateway, в `/var/log/nginx/devops-site.error.log` записывается `connect() failed (111: Connection refused) while connecting to upstream`.
 - Управление: запуск и сборка `cd ~/app && docker compose up -d --build`, состояние `docker compose ps`, журнал `docker compose logs app`.
+
+## 10. Ansible
+
+Проект Ansible находится в `ansible/` репозитория `devops-course-2026` в домашней файловой системе WSL. Управляющий узел — WSL, управляемый узел — VM `devops-vm` с Ubuntu Server 24.04, доступная по Host-only адресу `192.168.56.101` на порту SSH 22.
+
+Первичное подключение описано в `ansible/inventory/bootstrap.ini`: Ansible входит как `student` и запрашивает SSH- и sudo-пароли. Последующие запуски используют `ansible/inventory/prod.ini`: пользователь `devops` подключается по ключу `~/.ssh/devops_vm`; парольный SSH-вход отключён.
+
+Роли:
+- `base` проверяет платформу, устанавливает базовые пакеты и Docker Engine из официального репозитория;
+- `ssh` создаёт пользователя `devops`, устанавливает его открытый ключ, настраивает sudo, SSH и UFW;
+- `nginx` настраивает reverse proxy на локальный порт приложения и проверяет конфигурацию перед reload;
+- `app` загружает образ по заданному SHA, запускает контейнер и проверяет `/health`.
+
+Образ: `ghcr.io/larembra/devops-ci-app`. Используется опубликованный тег `a4e2518d11ae54f445b076e01c7dd3eafb1a9f3c`. Контейнер публикует порт `5000` только на `127.0.0.1`; внешний HTTP-доступ проходит через Nginx на порту `80`. Health endpoint: `/health`.
+
+Первичный запуск из каталога `ansible/`:
+
+```bash
+ansible-playbook -i inventory/bootstrap.ini site.yml --ask-pass --ask-become-pass
+
+ansible-playbook site.yml
+ansible-playbook verify.yml
+```
+
+Пароли и закрытый SSH-ключ в документацию и репозиторий не включаются.
