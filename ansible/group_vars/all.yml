@@ -1,0 +1,5 @@
+app_image: "ghcr.io/larembra/devops-ci-app"
+app_tag: "a4e2518d11ae54f445b076e01c7dd3eafb1a9f3c"
+app_container_name: "devops-ci-app"
+app_host_port: 5000
+app_internal_port: 5000
